@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <title>Déposer ma candidature — Mirano RP</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="stylesheet" href="/chat.css" />
+</head>
+<body>
+  <header class="header">
+    <div class="brand">
+      <div class="logo"></div>
+      <h1 class="title"><span class="mirano">Mirano</span> <span class="rp">RP</span></h1>
+    </div>
+    <div class="actions">
+      <a class="btn" href="/">Accueil</a>
+      <a class="btn" href="/dashboard.html" data-dashboard-btn>Espace privé</a>
+      <a class="btn primary" data-login-btn href="/auth/discord">Se connecter</a>
+
+      <div class="user-menu">
+        <button class="user-trigger" id="userTrigger">Mon compte ▾</button>
+        <div class="user-pop" id="userPop">
+          <div class="muted" id="usernameSlot">@invité</div>
+          <button id="logoutBtn">Se déconnecter</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="section">
+    <div class="card" style="max-width:900px;margin:0 auto">
+      <h3>Formulaire de candidature</h3>
+
+      <form id="application-form">
+        <div class="row">
+          <div>
+            <label>Nom Discord (Tag)</label>
+            <input class="input" name="discord_tag" placeholder="Ex: Pseudo#1234" required />
+          </div>
+          <div>
+            <label>Âge</label>
+            <input class="input" name="age" type="number" min="10" max="99" required />
+          </div>
+        </div>
+
+        <label>Disponibilités</label>
+        <input class="input" name="availability" required placeholder="Ex: Lundi soir, Mercredi aprem..." />
+
+        <label>Expérience RP</label>
+        <textarea class="input" name="rp_experience" rows="3"></textarea>
+
+        <label>Expérience en modération</label>
+        <textarea class="input" name="mod_experience" rows="3"></textarea>
+
+        <label>Motivations</label>
+        <textarea class="input" name="motivations" rows="3" required></textarea>
+
+        <label>Points à améliorer</label>
+        <textarea class="input" name="improvements" rows="2"></textarea>
+
+        <label>Message libre</label>
+        <textarea class="input" name="message" rows="2"></textarea>
+
+        <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap">
+          <button class="btn primary" type="submit">Envoyer</button>
+          <a class="btn ghost" href="/">Retour</a>
+        </div>
+      </form>
+    </div>
+  </main>
+
+  <footer class="footer">© Mirano RP</footer>
+  <div class="toast-wrap"></div>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>

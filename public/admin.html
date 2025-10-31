@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <title>Résultats — Mirano RP</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="header">
+    <div class="brand">
+      <div class="logo"></div>
+      <h1 class="title"><span class="mirano">Mirano</span> <span class="rp">RP</span></h1>
+    </div>
+    <div class="actions">
+      <a class="btn" href="/">Accueil</a>
+      <div class="user-menu">
+        <button class="user-trigger" id="userTrigger">Mon compte ▾</button>
+        <div class="user-pop" id="userPop">
+          <div class="muted" id="usernameSlot">@invité</div>
+          <button id="logoutBtn">Se déconnecter</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="section">
+    <div style="width:100%;max-width:1100px;margin:0 auto">
+      <h3>Toutes les candidatures</h3>
+      <div id="admin-cards"></div>
+      <div id="noAccess" class="muted" style="display:none;text-align:center;margin-top:40px">
+        🔒 Tu n’as pas accès à cette page.
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer">© Mirano RP</footer>
+  <div class="toast-wrap"></div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+  // === Utils ===
+  async function jget(u){const r=await fetch(u);return r.json();}
+  async function jpost(u,d){const r=await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d||{})});try{return await r.json()}catch{return{ok:false}}}
+  async function jdel(u){const r=await fetch(u,{method:'DELETE'});try{return await r.json()}catch{return{ok:false}}}
+
+  // === Toasts ===
+  function toast(msg, kind){
+    const root=document.querySelector('.toast-wrap');
+    const t=document.createElement('div');
+    t.className='toast'+(kind?' '+kind:'');
+    t.textContent=msg;
+    root.appendChild(t);
+    setTimeout(()=>{t.classList.add('fade');setTimeout(()=>t.remove(),300);},5000);
+  }
+
+  // === Chat flottant ===
+  function createChatFloat(){
+    if (document.querySelector('.chat-float')) return document.querySelector('.chat-float');
+    const wrap = document.createElement('div');
+    wrap.className = 'chat-float';
+    wrap.innerHTML = `
+      <div class="chat-header" id="chatDrag">
+        <div class="chat-title">Chat</div>
+        <button class="chat-close" aria-label="Fermer">✕</button>
+      </div>
+      <div class="chat-body">
+        <div class="log" id="chatLog"></div>
+        <div class="input-row">
+          <input class="input" id="chatInput" type="text" placeholder="Écrire un message…" />
+          <button class="btn small" id="chatSend">Envoyer</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(wrap);
+    return wrap;
+  }
+  function makeDraggable(box, handle){
+    let x=0,y=0,ox=0,oy=0,drag=false;
+    handle.addEventListener('mousedown',(e)=>{
+      drag=true;ox=e.clientX;oy=e.clientY;
+      const r=box.getBoundingClientRect();x=r.left;y=r.top;
+      document.body.style.userSelect='none';
+    });
+    document.addEventListener('mousemove',(e)=>{
+      if(!drag)return;
+      const dx=e.clientX-ox,dy=e.clientY-oy;
+      box.style.left=(x+dx)+'px';box.style.top=(y+dy)+'px';
+      box.style.position='fixed';
+    });
+    document.addEventListener('mouseup',()=>{drag=false;document.body.style.userSelect='';});
+  }
+  function renderMsg(log,m,isYou){
+    const p=document.createElement('div');
+    p.className='msg'+(isYou?' you':'');
+    p.innerHTML=`<strong>${m.userName||'Utilisateur'}</strong><br>${m.content}`;
+    log.appendChild(p);
+    log.scrollTop=log.scrollHeight;
+  }
+
+  // === Admin panel ===
+  const socket = io();
+  const ding = new Audio('/sounds/ding.mp3');
+  let unread=0, chatBadge;
+
+  function setupBadge(){
+    if(chatBadge) return chatBadge;
+    chatBadge=document.createElement('div');
+    chatBadge.className='chat-badge';
+    chatBadge.style.display='none';
+    document.body.appendChild(chatBadge);
+    return chatBadge;
+  }
+  function showBadge(){
+    const b=setupBadge(); unread++;
+    b.textContent=unread; b.style.display='flex';
+    b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop');
+  }
+  function resetBadge(){unread=0;if(chatBadge)chatBadge.style.display='none';}
+
+  async function initAdmin(){
+    const res=await fetch('/api/is-admin'); const {isAdmin}=await res.json();
+    const container=document.getElementById('admin-cards');
+    const noAccess=document.getElementById('noAccess');
+
+    if(!isAdmin){container.style.display='none';noAccess.style.display='block';return;}
+
+    const data=await fetch('/api/admin/applications');
+    const apps=await data.json();
+
+    if(!apps.length){container.innerHTML='<div class="muted">Aucune candidature trouvée.</div>';return;}
+
+    container.innerHTML='';
+    apps.forEach(app=>{
+      const card=document.createElement('div');
+      card.className='card';
+      card.style.marginBottom='14px';
+      card.innerHTML=`
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap">
+          <div>
+            <strong>${app.discord_tag||'Utilisateur inconnu'}</strong><br>
+            <span class="muted">${new Date(app.created_at).toLocaleString()}</span>
+          </div>
+          <div class="status ${app.status.replace(' ','_')}">${app.status}</div>
+        </div>
+        <div class="actions-row">
+          <button class="btn small" data-show>Afficher</button>
+          <button class="btn small" data-chat>Chat</button>
+          <button class="btn small ghost" data-accept>Accepter</button>
+          <button class="btn small ghost" data-refuse>Refuser</button>
+          <button class="btn small" data-del>🗑️ Supprimer</button>
+        </div>
+      `;
+      card.querySelector('[data-show]').onclick=()=>showDetails(app);
+      card.querySelector('[data-chat]').onclick=()=>openChatAdmin(app);
+      card.querySelector('[data-accept]').onclick=()=>updateStatus(app._id,'acceptée');
+      card.querySelector('[data-refuse]').onclick=()=>updateStatus(app._id,'refusée');
+      card.querySelector('[data-del]').onclick=async()=>{
+        if(!confirm('Supprimer cette candidature ?'))return;
+        const r=await fetch(`/api/admin/delete/${app._id}`,{method:'DELETE'});
+        if(r.ok){toast('🗑️ Supprimée','good');initAdmin();}
+      };
+      container.appendChild(card);
+    });
+  }
+
+  async function updateStatus(id,s){
+    const r=await fetch('/api/admin/update',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({id,status:s})
+    });
+    if(r.ok){toast('✅ Statut mis à jour','good');initAdmin();}
+  }
+
+  function showDetails(app){
+    const modal=document.createElement('div');
+    modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:9999';
+    modal.innerHTML=`
+      <div class="card" style="max-width:700px;width:90%;position:relative">
+        <button class="btn small" style="position:absolute;right:10px;top:10px">✕</button>
+        <h3>Détails de la candidature</h3>
+        <dl style="display:grid;grid-template-columns:180px 1fr;gap:8px;margin:0">
+          <dt>Discord</dt><dd>${app.discord_tag||'-'}</dd>
+          <dt>Âge</dt><dd>${app.age??'-'}</dd>
+          <dt>Disponibilités</dt><dd>${app.availability??'-'}</dd>
+          <dt>Expérience RP</dt><dd>${app.rp_experience??'-'}</dd>
+          <dt>Exp. Modération</dt><dd>${app.mod_experience??'-'}</dd>
+          <dt>Motivations</dt><dd>${app.motivations??'-'}</dd>
+          <dt>Points à améliorer</dt><dd>${app.improvements??'-'}</dd>
+          <dt>Message</dt><dd>${app.message??'-'}</dd>
+        </dl>
+      </div>
+    `;
+    modal.querySelector('button').onclick=()=>modal.remove();
+    modal.addEventListener('click',(e)=>{if(e.target===modal)modal.remove();});
+    document.body.appendChild(modal);
+  }
+
+  // === Chat admin ↔ candidat ===
+  function openChatAdmin(app){
+    const box=createChatFloat();
+    const drag=box.querySelector('#chatDrag');
+    const close=box.querySelector('.chat-close');
+    const log=box.querySelector('#chatLog');
+    const input=box.querySelector('#chatInput');
+    const sendBtn=box.querySelector('#chatSend');
+
+    log.innerHTML='';
+    box.style.display='block';
+    makeDraggable(box,drag);
+    resetBadge();
+
+    socket.emit('joinRoom',{appId:app._id});
+
+    fetch(`/api/messages/${app._id}`)
+      .then(r=>r.json())
+      .then(msgs=>{msgs.forEach(m=>renderMsg(log,m,false));});
+
+    socket.off('chatMessage');
+    socket.on('chatMessage',(msg)=>{
+      if(msg.appId!==app._id)return;
+      renderMsg(log,msg,false);
+      ding.currentTime=0; ding.play().catch(()=>{});
+      showBadge();
+    });
+
+    sendBtn.onclick=()=>{
+      const txt=(input.value||'').trim();
+      if(!txt)return;
+      socket.emit('chatMessage',{appId:app._id,userId:'admin',userName:'Admin',content:txt});
+      input.value='';
+    };
+
+    close.onclick=()=>{
+      socket.emit('leaveRoom',{appId:app._id});
+      box.style.display='none';
+    };
+  }
+
+  window.addEventListener('DOMContentLoaded',()=>initAdmin());
+  </script>
+</body>
+</html>
