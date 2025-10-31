@@ -149,7 +149,7 @@ app.get("/api/my-applications", async (req, res) => {
 });
 
 // ──────────────── ADMIN ────────────────
-const ADMIN_IDS = ["980457085173104740"]; // 👑 Ton ID Discord admin
+const ADMIN_IDS = ["1398750844459024454"]; // 👑 Ton ID Discord admin
 
 app.get("/api/is-admin", (req, res) => {
   const isAdmin = req.user && ADMIN_IDS.includes(req.user.id);
